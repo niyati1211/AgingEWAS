@@ -1,0 +1,271 @@
+---
+title: "cpg_island_enrichment"
+author: "Niyati Jain"
+date: "2023-06-25"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(data.table)
+library(corrplot)
+library(readxl)
+library(RColorBrewer)
+library(epitools)
+library(scales)
+library(splitstackshape)
+```
+
+```{r}
+THEME = theme_bw () +
+  theme(plot.title = element_text(face="bold",size = 20,colour = "black", hjust = 0.5),
+        plot.subtitle = element_text(size = 22,colour= "black"),
+        axis.title = element_text (size = 29,face= "bold"),
+        axis.text.x= element_text(vjust = 1,hjust =1,color = "black", size = 26,angle= 45), #,face="bold" vjust centered to tick
+        axis.text.y= element_text(colour = "black", size = 26,vjust = 0.5,hjust = 1),
+        axis.text.y.right= element_text(colour = "black", size = 16,vjust = 0.5,hjust = 1),
+        axis.line =  element_line(colour="black", linetype ="solid"),
+        legend.key = element_rect(colour = "white",fill ="white",linetype='solid'),
+        legend.direction = "vertical",
+        legend.position ="right",
+        legend.text = element_text(size =24, colour = "black", angle = 0),
+        legend.title = element_text(size =22, face="bold",colour = "black", angle = 0),
+        #legend.background = element_rect(colour="black"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_blank(), 
+        strip.text = element_text(size = 20))
+```
+
+load the Age-DNAm association results
+```{r}
+
+breast <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_breast_manifest_sv5updated_FDR05.txt", header=F, fill=T)
+colon <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_colon_manifest_sv10updated_FDR05.txt", header=F, fill=T)
+kidney <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_kidney_manifest_sv5updated_FDR05.txt", header=F, fill=T)
+lung <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_lung_manifest_sv10updated_FDR05.txt", header=F, fill=T)
+#muscle <- read.table("age_EWAS_results_muscle_manifest_sv10updated_FDR05.txt", header=T, fill=T)
+ovary <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_ovary_manifest_sv5updated_FDR05.txt", header=F, fill=T)
+prostate <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_prostate_manifest_sv10updated_FDR05.txt", header=F, fill=T)
+testis <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_testis_manifest_sv5updated_FDR05.txt", header=F, fill=T)
+wblood <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_wb_manifest_sv5updated_FDR05.txt", header=F, fill=T)
+
+colnames(breast) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(colon) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(lung) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(kidney) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(ovary) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(prostate) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(testis) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(wblood) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+```
+
+Separate the hypermethylated and hypomethylated CpG sites
+```{r}
+breast_gain_aDMPs <- breast %>% filter(logFC >= 0)
+colon_gain_aDMPs <- colon %>% filter(logFC >= 0)
+kidney_gain_aDMPs <- kidney %>% filter(logFC >= 0)
+lung_gain_aDMPs <- lung %>% filter(logFC >= 0)
+ovary_gain_aDMPs <- ovary %>% filter(logFC >= 0)
+prostate_gain_aDMPs <- prostate %>% filter(logFC >= 0)
+testis_gain_aDMPs <- testis %>% filter(logFC >= 0)
+wblood_gain_aDMPs <- wblood %>% filter(logFC >= 0)
+
+breast_loss_aDMPs <- breast %>% filter(logFC < 0)
+colon_loss_aDMPs <- colon %>% filter(logFC < 0)
+kidney_loss_aDMPs <- kidney %>% filter(logFC<0)
+lung_loss_aDMPs <- lung %>% filter(logFC<0)
+ovary_loss_aDMPs <- ovary %>% filter(logFC<0)
+prostate_loss_aDMPs <- prostate %>% filter(logFC<0)
+testis_loss_aDMPs <- testis %>% filter(logFC<0)
+wblood_loss_aDMPs <- wblood %>% filter(logFC<0)
+```
+
+Format the background
+```{r}
+#methylation array background
+methylation_array <- read.csv("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/MethylationEPIC_v-1-0_B4.csv")
+
+#cpgs == file onlyc including filtered 754,199 CpGs considered in our analysis (excluding CpGs that were filtered during QC)
+#this line of code is to endure our colon_background only contains post-QC CpGs
+cpgs <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_breast_manifest_sv5updated_NJ.txt", header=F, fill=T)
+colnames(cpgs) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+
+methylarray <- inner_join(methylation_array, cpgs, by = 'Name')
+methylarray <- methylarray %>% select(IlmnID:Random_Loci)
+
+#select relevant columns from methylation array file  
+cpg_select <- methylarray %>% dplyr::select(Name, Relation_to_UCSC_CpG_Island, UCSC_CpG_Islands_Name, UCSC_RefGene_Name.x)
+
+#annotate relation to Islands
+cpg_select$Relation_to_UCSC_CpG_Island[cpg_select$Relation_to_UCSC_CpG_Island==""] <- "Open sea"
+cpg_select$Relation_to_UCSC_CpG_Island[cpg_select$Relation_to_UCSC_CpG_Island=="N_Shore"] <- "Shore"
+cpg_select$Relation_to_UCSC_CpG_Island[cpg_select$Relation_to_UCSC_CpG_Island=="S_Shore"] <- "Shore"
+cpg_select$Relation_to_UCSC_CpG_Island[cpg_select$Relation_to_UCSC_CpG_Island=="S_Shelf"] <- "Shelf"
+cpg_select$Relation_to_UCSC_CpG_Island[cpg_select$Relation_to_UCSC_CpG_Island=="N_Shelf"] <- "Shelf"
+cpg_select %>% group_by(Relation_to_UCSC_CpG_Island) %>% tally()
+```
+
+Format the hypermethylated data
+```{r}
+#add column annotation 
+lung_gain_aDMPs <- lung_gain_aDMPs %>% mutate(type = 'Lung: Hypermethylated)') %>% select(Name, logFC, adj.P.Val, type)
+colon_gain_aDMPs <- colon_gain_aDMPs %>% mutate(type = 'Colon: Hypermethylated') %>% select(Name, logFC, adj.P.Val, type)
+ovary_gain_aDMPs <- ovary_gain_aDMPs %>% mutate(type = 'Ovary: Hypermethylated)') %>% select(Name, logFC, adj.P.Val, type)
+prostate_gain_aDMPs <- prostate_gain_aDMPs %>% mutate(type = 'Prostate: Hypermethylated') %>% select(Name, logFC, adj.P.Val, type)
+testis_gain_aDMPs <- testis_gain_aDMPs %>% mutate(type = 'Testis: Hypermethylated)') %>% select(Name, logFC, adj.P.Val, type)
+breast_gain_aDMPs <- breast_gain_aDMPs %>% mutate(type = 'Breast: Hypermethylated') %>% select(Name, logFC, adj.P.Val, type)
+wblood_gain_aDMPs <- wblood_gain_aDMPs %>% mutate(type = 'Whole blood: Hypermethylated)') %>% select(Name, logFC, adj.P.Val, type)
+kidney_gain_aDMPs <- kidney_gain_aDMPs %>% mutate(type = 'Kidney: Hypermethylated') %>% select(Name, logFC, adj.P.Val, type)
+
+#create one table with all CpGs
+all_tissues <- rbind(kidney_gain_aDMPs, wblood_gain_aDMPs, breast_gain_aDMPs, testis_gain_aDMPs, prostate_gain_aDMPs, ovary_gain_aDMPs, colon_gain_aDMPs, lung_gain_aDMPs)
+
+cpg_tissues <- inner_join(all_tissues, cpg_select, by = 'Name') %>% select(Name, Relation_to_UCSC_CpG_Island, UCSC_CpG_Islands_Name, type)
+
+#make sure the annotations are present
+cpg_tissues$Relation_to_UCSC_CpG_Island[cpg_tissues$Relation_to_UCSC_CpG_Island==""] <- "Open sea"
+cpg_tissues$Relation_to_UCSC_CpG_Island[cpg_tissues$Relation_to_UCSC_CpG_Island=="N_Shore"] <- "Shore"
+cpg_tissues$Relation_to_UCSC_CpG_Island[cpg_tissues$Relation_to_UCSC_CpG_Island=="S_Shore"] <- "Shore"
+cpg_tissues$Relation_to_UCSC_CpG_Island[cpg_tissues$Relation_to_UCSC_CpG_Island=="S_Shelf"] <- "Shelf"
+cpg_tissues$Relation_to_UCSC_CpG_Island[cpg_tissues$Relation_to_UCSC_CpG_Island=="N_Shelf"] <- "Shelf"
+
+#tally the number of each region by type (type = tissue type, positive and negative sites)
+cpg_island <- cpg_tissues %>% group_by(type, Relation_to_UCSC_CpG_Island) %>% tally()
+cpg_island[is.na(cpg_island)] <- "Open Sea"
+```
+
+Calculate enrichment and plot results
+```{r}
+#Add columns
+#n = number of significant smoking DMPs in islands, shores, open sea, and shelves 
+#cpg_info = number of islands, shores, open sea, shelves in methylation array i.e. background
+#IGNORE DIFF COLUMN
+#freq_admps = n/total, e.g. for colon positive DMPs, number of islands/total number of colon DMPs
+#freq = cpg_info/total
+cpg_island_freq <- cpg_island %>% group_by(type) %>% mutate(cpg_info = ifelse(Relation_to_UCSC_CpG_Island == 'Island', 144953, ifelse(Relation_to_UCSC_CpG_Island == 'Shelf', 52535, ifelse(Relation_to_UCSC_CpG_Island == 'Shore', 136218, 420413)))) %>% mutate(diff = cpg_info-n, freq = cpg_info/sum(cpg_info), freq_admps = n/sum(n), type.1 = "Age-related CpGs", type.2 = "Background") 
+
+#this table is the frequency of smoking DMPs (FDR 0.05)
+#note: renaming column so I can rbind the tables LATER
+signif <- cpg_island_freq %>% dplyr::select(Relation_to_UCSC_CpG_Island, freq_admps, type.1) %>% dplyr::rename(freq = freq_admps, type.2 = type.1)
+
+#this the frequency of ALL CpGs background  
+nonsignif <- cpg_island_freq %>% dplyr::select(Relation_to_UCSC_CpG_Island, freq, type.2)
+freq_plot <- rbind(signif, nonsignif)
+order <- c("Island", "Shore", "Shelf", "Open sea")
+
+write.table(freq_plot, "frequency_islands__hyper_all_tissues.txt", sep='\t', quote = F, row.names = F)
+
+freq_plot_df <- freq_plot[1:36,]
+
+freq_plot_df$type[33] <- "Background (754,119 CpGs)"
+freq_plot_df$type[34] <- "Background (754,119 CpGs)"
+freq_plot_df$type[35] <- "Background (754,119 CpGs)"
+freq_plot_df$type[36] <- "Background (754,119 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Breast: Hypermethylated")] <- "Breast (24,766 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Colon: Hypermethylated")] <- "Colon (40,029 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Kidney: Hypermethylated")] <- "Kidney (41 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Lung: Hypermethylated)")] <- "Lung (29,432 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Ovary: Hypermethylated)")] <- "Ovary (96,210 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Prostate: Hypermethylated")] <- "Prostate (15,624 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Testis: Hypermethylated)")] <- "Testis (1,278 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Whole blood: Hypermethylated)")] <- "Whole blood (109)"
+
+order_tissue <- c("Background (754,119 CpGs)", "Lung (29,432 CpGs)","Colon (40,029 CpGs)", "Ovary (96,210 CpGs)","Prostate (15,624 CpGs)", "Whole blood (109)", "Testis (1,278 CpGs)", "Breast (24,766 CpGs)", "Kidney (41 CpGs)")
+order <- c("Island", "Shore", "Shelf", "Open sea")
+
+freq_plot_df$type <- factor(freq_plot_df$type, levels = order_tissue)
+
+p1 <- ggplot(freq_plot_df, aes(x = type, y = freq, fill =
+factor(Relation_to_UCSC_CpG_Island, levels = order))) + 
+  geom_bar(stat = "identity") +
+  #facet_wrap(~type, scales='free')+
+  theme_minimal() +
+  scale_fill_brewer(palette = "Reds") +
+  xlab("") + ylab("Proportion of CpG sites") + theme(panel.spacing.x = unit(2, "lines"), panel.spacing.y = unit(2, "lines"))+guides(fill=guide_legend(title="")) + THEME
+p1
+```
+
+Format the hypomethylated data
+```{r}
+lung_loss_aDMPs <- lung_loss_aDMPs %>% mutate(type = 'Lung: Hypomethylated') %>% select(Name, logFC, adj.P.Val, type)
+colon_loss_aDMPs <- colon_loss_aDMPs %>% mutate(type = 'Colon: Hypomethylated') %>% select(Name, logFC, adj.P.Val, type)
+ovary_loss_aDMPs <- ovary_loss_aDMPs %>% mutate(type = 'Ovary: Hypomethylated') %>% select(Name, logFC, adj.P.Val, type)
+prostate_loss_aDMPs <- prostate_loss_aDMPs %>% mutate(type = 'Prostate: Hypomethylated') %>% select(Name, logFC, adj.P.Val, type)
+testis_loss_aDMPs <- testis_loss_aDMPs %>% mutate(type = 'Testis: Hypomethylated') %>% select(Name, logFC, adj.P.Val, type)
+breast_loss_aDMPs <- breast_loss_aDMPs %>% mutate(type = 'Breast: Hypomethylated') %>% select(Name, logFC, adj.P.Val, type)
+wblood_loss_aDMPs <- wblood_loss_aDMPs %>% mutate(type = 'Whole blood: Hypomethylated') %>% select(Name, logFC, adj.P.Val, type)
+kidney_loss_aDMPs <- kidney_loss_aDMPs %>% mutate(type = 'Kidney: Hypomethylated') %>% select(Name, logFC, adj.P.Val, type)
+
+#create one table with all CpGs
+all_tissues <- rbind(kidney_loss_aDMPs, wblood_loss_aDMPs, breast_loss_aDMPs, testis_loss_aDMPs, prostate_loss_aDMPs, ovary_loss_aDMPs, colon_loss_aDMPs, lung_loss_aDMPs)
+
+cpg_tissues <- inner_join(all_tissues, cpg_select, by = 'Name') %>% select(Name, Relation_to_UCSC_CpG_Island, UCSC_CpG_Islands_Name, type)
+
+#make sure the annotations are present
+cpg_tissues$Relation_to_UCSC_CpG_Island[cpg_tissues$Relation_to_UCSC_CpG_Island==""] <- "Open sea"
+cpg_tissues$Relation_to_UCSC_CpG_Island[cpg_tissues$Relation_to_UCSC_CpG_Island=="N_Shore"] <- "Shore"
+cpg_tissues$Relation_to_UCSC_CpG_Island[cpg_tissues$Relation_to_UCSC_CpG_Island=="S_Shore"] <- "Shore"
+cpg_tissues$Relation_to_UCSC_CpG_Island[cpg_tissues$Relation_to_UCSC_CpG_Island=="S_Shelf"] <- "Shelf"
+cpg_tissues$Relation_to_UCSC_CpG_Island[cpg_tissues$Relation_to_UCSC_CpG_Island=="N_Shelf"] <- "Shelf"
+
+#tally the number of each region by type (type = lung and colon, positive and negative smoking DMPs)
+cpg_island <- cpg_tissues %>% group_by(type, Relation_to_UCSC_CpG_Island) %>% tally()
+cpg_island[is.na(cpg_island)] <- "Open Sea"
+
+setwd("/Volumes/groups/Projects/GTEx/niyati/Aging_EWAS_new_SVA/")
+write.csv(cpg_island, "cpg_island_hypo_stratified.csv")
+```
+
+Calculate enrichment and plot results
+```{r}
+#Add columns
+#n = number of significant smoking DMPs in islands, shores, open sea, and shelves 
+#cpg_info = number of islands, shores, open sea, shelves in methylation array i.e. background
+#IGNORE DIFF COLUMN
+#freq_admps = n/total, e.g. for colon positive DMPs, number of islands/total number of colon DMPs
+#freq = cpg_info/total
+cpg_island_freq <- cpg_island %>% group_by(type) %>% mutate(cpg_info = ifelse(Relation_to_UCSC_CpG_Island == 'Island', 144953, ifelse(Relation_to_UCSC_CpG_Island == 'Shelf', 52535, ifelse(Relation_to_UCSC_CpG_Island == 'Shore', 136218, 420413)))) %>% mutate(diff = cpg_info-n, freq = cpg_info/sum(cpg_info), freq_admps = n/sum(n), type.1 = "Age-related CpGs", type.2 = "Background") 
+
+#this table is the frequency of smoking DMPs (FDR 0.05)
+#note: renaming column so I can rbind the tables LATER
+signif <- cpg_island_freq %>% dplyr::select(Relation_to_UCSC_CpG_Island, freq_admps, type.1) %>% dplyr::rename(freq = freq_admps, type.2 = type.1)
+
+#this the frequency of ALL CpGs background  
+nonsignif <- cpg_island_freq %>% dplyr::select(Relation_to_UCSC_CpG_Island, freq, type.2)
+freq_plot <- rbind(signif, nonsignif)
+order <- c("Island", "Shore", "Shelf", "Open sea")
+
+write.table(freq_plot, "frequency_islands__hypo_all_tissues.txt", sep='\t', quote = F, row.names = F)
+
+freq_plot <- read.table("/Volumes/groups/Projects/GTEx/niyati/Aging_EWAS_new_SVA/frequency_islands__hypo_all_tissues.txt", sep="\t", header = T)
+freq_plot_df <- freq_plot[1:32,]
+
+freq_plot_df$type[29] <- "Background (754,119 CpGs)"
+freq_plot_df$type[30] <- "Background (754,119 CpGs)"
+freq_plot_df$type[31] <- "Background (754,119 CpGs)"
+freq_plot_df$type[32] <- "Background (754,119 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Breast: Hypomethylated")] <- "Breast (13,220 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Colon: Hypomethylated")] <- "Colon (17,140 CpGs)"
+#freq_plot_df$type[which(freq_plot_df$type == "Kidney: Hypomethylated")] <- "Kidney"
+freq_plot_df$type[which(freq_plot_df$type == "Lung: Hypomethylated")] <- "Lung (21,422 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Ovary: Hypomethylated")] <- "Ovary (38,776 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Prostate: Hypomethylated")] <- "Prostate (15,220 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Testis: Hypomethylated")] <- "Testis (3,786 CpGs)"
+freq_plot_df$type[which(freq_plot_df$type == "Whole blood: Hypomethylated")] <- "Whole blood (438 CpGs)"
+
+order_tissue <- c("Background (754,119 CpGs)", "Lung (21,422 CpGs)", "Colon (17,140 CpGs)", "Ovary (38,776 CpGs)", "Prostate (15,220 CpGs)", "Whole blood (438 CpGs)", "Testis (3,786 CpGs)", "Breast (13,220 CpGs)")
+order <- c("Island", "Shore", "Shelf", "Open sea")
+p1 <- ggplot(freq_plot_df, aes(x = factor(type, levels = order_tissue), y = freq, fill =
+factor(Relation_to_UCSC_CpG_Island, levels = order))) + 
+  geom_bar(freq_plot_df = subset(freq_plot_df, type == "Background (754,119 CpGs)"), stat = "identity", width = 0.2) +
+  geom_bar(freq_plot_df = subset(freq_plot_df, type != "Background (754,119 CpGs)"), stat = "identity", width = 0.8) +
+  #facet_wrap(~type, scales='free')+
+  theme_minimal() +
+  scale_fill_brewer(palette = "Blues") +
+  xlab("") + ylab("Proportion of CpG sites") + theme(panel.spacing.x = unit(2, "lines"), panel.spacing.y = unit(2, "lines"))+guides(fill=guide_legend(title="")) + THEME
+p1
+```
+

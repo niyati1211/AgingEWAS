@@ -1,0 +1,447 @@
+---
+title: "chromatin segmentation"
+author: "Niyati Jain"
+date: "2023-06-27"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(data.table)
+library(corrplot)
+library(readxl)
+library(RColorBrewer)
+library(epitools)
+library(scales)
+```
+
+```{r}
+THEME = theme_bw () +
+  theme(plot.title = element_text(face="bold",size = 20,colour = "black", hjust = 0.5),
+        plot.subtitle = element_text(size = 22,colour= "black"),
+        axis.title = element_text (size = 14,face= "bold"),
+        axis.text.x= element_text(vjust = 1,hjust =1,color = "black", size = 18,angle= 45), #,face="bold" vjust centered to tick
+        axis.text.y= element_text(colour = "black", size = 18,vjust = 0.5,hjust = 1),
+        axis.text.y.right= element_text(colour = "black", size = 16,vjust = 0.5,hjust = 1),
+        axis.line =  element_line(colour="black", linetype ="solid"),
+        legend.key = element_rect(colour = "white",fill ="white",linetype='solid'),
+        legend.direction = "vertical",
+        legend.position ="right",
+        legend.text = element_text(size =12, colour = "black", angle = 0),
+        legend.title = element_text(size =18, face="bold",colour = "black", angle = 0),
+        #legend.background = element_rect(colour="black"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_blank(), 
+        strip.text = element_text(size = 20))
+```
+
+
+Roadmap Epigenomics reference data that matches with tissue types (https://egg2.wustl.edu/roadmap/web_portal/chr_state_learning.html)
+https://egg2.wustl.edu/roadmap/figures/mainFigs/Figure_2.jpg
+```{bash}
+EO96=lung primary 
+E075=colon mucosa
+E097=ovary
+E086=fetal kidney
+E028=Breast vHMEC mammary epithelial
+```
+
+load the Age-DNAm association results
+```{r}
+breast <- read.table("age_EWAS_results_breast_manifest_sv5updated_FDR05.txt", header=F, fill=T)
+colon <- read.table("age_EWAS_results_colon_manifest_sv10updated_FDR05.txt", header=F, fill=T)
+lung <- read.table("age_EWAS_results_lung_manifest_sv10updated_FDR05.txt", header=F, fill=T)
+ovary <- read.table("age_EWAS_results_ovary_manifest_sv5updated_FDR05.txt", header=F, fill=T)
+```
+
+Update the column names
+```{r}
+colnames(breast) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(colon) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(lung) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(ovary) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+```
+
+Separate the hypermethylated and hypomethylated CpG sites
+Save as separate files
+```{r}
+breast_hyper <- breast %>% filter(logFC > 0) %>% mutate(end=MAPINFO, start=MAPINFO, end.2=MAPINFO, score = '0', strand = '+', chr = paste0('chr',CHR)) %>% select(chr, MAPINFO, end, Name, score, strand, start, end.2)
+breast_hypo <- breast %>% filter(logFC < 0) %>% mutate(end=MAPINFO, start=MAPINFO, end.2=MAPINFO, score = '0', strand = '+', chr = paste0('chr',CHR)) %>% select(chr, MAPINFO, end, Name, score, strand, start, end.2)
+
+write.table(breast_hyper, "breast_hyper.bed", sep='\t', quote = F, row.names = F)
+write.table(breast_hypo, "breast_hypo.bed", sep='\t', quote = F, row.names = F)
+
+colon_hyper <- colon %>% filter(logFC > 0) %>% mutate(end=MAPINFO, start=MAPINFO, end.2=MAPINFO, score = '0', strand = '+', chr = paste0('chr',CHR)) %>% select(chr, MAPINFO, end, Name, score, strand, start, end.2)
+colon_hypo <- colon %>% filter(logFC < 0) %>% mutate(end=MAPINFO, start=MAPINFO, end.2=MAPINFO, score = '0', strand = '+', chr = paste0('chr',CHR)) %>% select(chr, MAPINFO, end, Name, score, strand, start, end.2)
+
+write.table(colon_hyper, "colon_hyper.bed", sep='\t', quote = F, row.names = F)
+write.table(colon_hypo, "colon_hypo.bed", sep='\t', quote = F, row.names = F)
+
+lung_hyper <- lung %>% filter(logFC > 0) %>% mutate(end=MAPINFO, start=MAPINFO, end.2=MAPINFO, score = '0', strand = '+', chr = paste0('chr',CHR)) %>% select(chr, MAPINFO, end, Name, score, strand, start, end.2)
+lung_hypo <- lung %>% filter(logFC < 0) %>% mutate(end=MAPINFO, start=MAPINFO, end.2=MAPINFO, score = '0', strand = '+', chr = paste0('chr',CHR)) %>% select(chr, MAPINFO, end, Name, score, strand, start, end.2)
+
+write.table(lung_hyper, "lung_hyper.bed", sep='\t', quote = F, row.names = F)
+write.table(lung_hypo, "lung_hypo.bed", sep='\t', quote = F, row.names = F)
+
+ovary_hyper <- ovary %>% filter(logFC > 0) %>% mutate(end=MAPINFO, start=MAPINFO, end.2=MAPINFO, score = '0', strand = '+', chr = paste0('chr',CHR)) %>% select(chr, MAPINFO, end, Name, score, strand, start, end.2)
+ovary_hypo <- ovary %>% filter(logFC < 0) %>% mutate(end=MAPINFO, start=MAPINFO, end.2=MAPINFO, score = '0', strand = '+', chr = paste0('chr',CHR)) %>% select(chr, MAPINFO, end, Name, score, strand, start, end.2)
+
+write.table(ovary_hyper, "ovary_hyper.bed", sep='\t', quote = F, row.names = F)
+write.table(ovary_hypo, "ovary_hypo.bed", sep='\t', quote = F, row.names = F)
+```
+
+#COLON
+Overlap of CpGs with reference data using bedtools intersect
+```{r}
+#methylation array background overlap with colon mucusa chromatin segmentation file to get annotations for all CpGs in background
+colon_background <- read.table("colon_chmm_background.bed", sep="\t", header=F) 
+colon_background <- colon_background %>% rename(Name = V13) %>% select(V1:Name)
+
+#cpgs == file onlyc including filtered 754,199 CpGs considered in our analysis (excluding CpGs that were filtered during QC)
+#this line of code is to endure our colon_background only contains post-QC CpGs
+colon_background <- inner_join(colon_background, cpgs, by = 'Name')
+colon_background <- colon_background %>% select(V1:Name) %>% filter(!duplicated(Name))
+
+#colon CpGs with positive logFC overlapped with colon mucuosa chromatin segmentation file 
+colon_fdr_pos <- read.table("colon_hyper_chmm.bed", sep="\t", header=F)
+colon_fdr_pos <- colon_fdr_pos %>% rename(Name = V13)
+
+#join the hypermethylated cpgs with colon_background
+#we only do this to get the metadata for the cpg sites (position etc.)
+colon_fdr_pos <- inner_join(colon_fdr_pos, colon_background, by = 'Name')
+
+##colon CpGs with negative logFC overlapped with colon mucuosa chromatinc segmentation file
+colon_fdr_neg <- read.table("colon_hypo_chmm.bed", sep="\t", header=F) 
+colon_fdr_neg <- colon_fdr_neg %>% rename(Name = V13)
+
+#join the hypomethylated cpgs with colon_background
+colon_fdr_neg <- inner_join(colon_fdr_neg, colon_background, by = 'Name')
+
+#Get counts of each type of chromatin segment (these are the ones that pass FDR)
+summary_fdr_pos <- colon_fdr_pos %>% filter(!duplicated(Name)) %>% group_by(V4.x) %>% tally() %>% rename(FDR = n) %>% rename(V4 = V4.x)
+summary_fdr_neg <- colon_fdr_neg %>% filter(!duplicated(Name)) %>% group_by(V4.x) %>% tally() %>% rename(FDR = n) %>% rename(V4 = V4.x)
+
+#Get counts of each type of chromatin segment (these are all CpGs in background array)
+summary_background <- colon_background %>% filter(!duplicated(Name)) %>% group_by(V4) %>% tally() %>% rename(background = n)
+
+#E.g. segment TSS: calculate number number of CpGs that pass FDR+not TSS
+#calculate number of CpGs that are not TSS in background
+df1 <- inner_join(summary_fdr_pos, summary_background, by = 'V4')
+df1 <- df1 %>% mutate(notSegmentFDR = sum(FDR)-FDR, notSegmentBackground = sum(background)-background)
+
+df2 <- inner_join(summary_fdr_neg, summary_background, by = 'V4')
+df2 <- df2 %>% mutate(notSegmentFDR = sum(FDR)-FDR, notSegmentBackground = sum(background)-background)
+
+#Calculate odds ratio by creating 2x2 table 
+#FDR Background (2 columns)
+#Segment (e.g TSS) (row 1)
+#not Segment (row)
+or <- c()
+pval <- c()    
+for (i in 1:15){
+    mat <- matrix(c(df1$FDR[i], df1$background[i], df1$notSegmentFDR[i], df1$notSegmentBackground[i]), nrow=2, ncol=2, byrow=TRUE) 
+    or[i] <- oddsratio(mat)$measure[2,1]
+    pval[i] <- oddsratio(mat)$p.value[2,2]
+  }
+
+#odds ratio table with p value for enrichment of colon CpGs with positive logFC 
+colon_map_pos <- data.frame(df1, or, pval)
+colon_map_pos <- colon_map_pos %>% rename(OR=or) %>% mutate(type = 'Colon positive logFC')
+
+or <- c()
+pval <- c()    
+for (i in 1:15){
+    mat <- matrix(c(df2$FDR[i], df2$background[i], df2$notSegmentFDR[i], df2$notSegmentBackground[i]), nrow=2, ncol=2, byrow=TRUE) 
+    or[i] <- oddsratio(mat)$measure[2,1]
+    pval[i] <- oddsratio(mat)$p.value[2,2]
+  }
+  
+colon_map_neg <- data.frame(df1, or, pval)
+colon_map_neg <- colon_map_neg %>% rename(OR=or) %>% mutate(type = 'Colon negative logFC')
+
+#Add two additional rows to data.frame so that it's 15 rows so it matches table of lungs 
+#note 2/15 segments not present in FDR colon CpGs so can't calculate OR that's why 13 rows 
+write.csv(colon_map_neg, "colon_map_neg.csv")
+write.csv(colon_map_pos, "colon_map_pos.csv")
+```
+
+#LUNG
+```{r}
+#methylation array overlap with lung mucusa chromatin segmentation file to get annotations for all CpGs in background
+lung_background <- read.table("lung_chmm_background.bed", sep="\t", header=F) 
+lung_background <- lung_background %>% rename(Name = V13) %>% select(V1:Name)
+
+lung_background <- inner_join(lung_background, cpgs, by = 'Name')
+lung_background <- lung_background %>% select(V1:Name) %>% filter(!duplicated(Name))
+
+#lung CpGs with positive logFC overlapped with lung mucuosa chromatin segmentation file 
+lung_fdr_pos <- read.table("lung_hyper_chmm.bed", sep="\t", header=F)
+lung_fdr_pos <- lung_fdr_pos %>% rename(Name = V13)
+
+lung_fdr_pos <- inner_join(lung_fdr_pos, lung_background, by = 'Name')
+
+##lung CpGs with negative logFC overlapped with lung mucuosa chromatinc segmentation file
+lung_fdr_neg <- read.table("lung_hypo_chmm.bed", sep="\t", header=F) 
+lung_fdr_neg <- lung_fdr_neg %>% rename(Name = V13)
+
+lung_fdr_neg <- inner_join(lung_fdr_neg, lung_background, by = 'Name')
+
+#Get counts of each type of chromatin segment (these are the ones that pass FDR)
+summary_fdr_pos <- lung_fdr_pos %>% filter(!duplicated(Name)) %>% group_by(V4.x) %>% tally() %>% rename(FDR = n) %>% rename(V4 = V4.x)
+summary_fdr_neg <- lung_fdr_neg %>% filter(!duplicated(Name)) %>% group_by(V4.x) %>% tally() %>% rename(FDR = n) %>% rename(V4 = V4.x)
+
+#Get counts of each type of chromatin segment (these are all CpGs in background array)
+summary_background <- lung_background %>% filter(!duplicated(Name)) %>% group_by(V4) %>% tally() %>% rename(background = n)
+
+#E.g. segment TSS: calculate number number of CpGs that pass FDR+not TSS
+#calculate number of CpGs that are not TSS in background
+df1 <- inner_join(summary_fdr_pos, summary_background, by = 'V4')
+df1 <- df1 %>% mutate(notSegmentFDR = sum(FDR)-FDR, notSegmentBackground = sum(background)-background)
+
+df2 <- inner_join(summary_fdr_neg, summary_background, by = 'V4')
+df2 <- df2 %>% mutate(notSegmentFDR = sum(FDR)-FDR, notSegmentBackground = sum(background)-background)
+
+#Calculate odds ratio by creating 2x2 table 
+#FDR Background (2 columns)
+#Segment (e.g TSS) (row 1)
+#not Segment (row)
+or <- c()
+pval <- c()    
+for (i in 1:15){
+  mat <- matrix(c(df1$FDR[i], df1$background[i], df1$notSegmentFDR[i], df1$notSegmentBackground[i]), nrow=2, ncol=2, byrow=TRUE) 
+  or[i] <- oddsratio(mat)$measure[2,1]
+  pval[i] <- oddsratio(mat)$p.value[2,2]
+}
+
+#odds ratio table with p value for enrichment of lung CpGs with positive logFC 
+lung_map_pos <- data.frame(df1, or, pval)
+lung_map_pos <- lung_map_pos %>% rename(OR=or) %>% mutate(type = 'lung positive logFC')
+
+or <- c()
+pval <- c()    
+for (i in 1:15){
+  mat <- matrix(c(df2$FDR[i], df2$background[i], df2$notSegmentFDR[i], df2$notSegmentBackground[i]), nrow=2, ncol=2, byrow=TRUE) 
+  or[i] <- oddsratio(mat)$measure[2,1]
+  pval[i] <- oddsratio(mat)$p.value[2,2]
+}
+
+lung_map_neg <- data.frame(df1, or, pval)
+lung_map_neg <- lung_map_neg %>% rename(OR=or) %>% mutate(type = 'lung negative logFC')
+
+#Add two additional rows to data.frame so that it's 15 rows so it matches table of lungs 
+#note 2/15 segments not present in FDR lung CpGs so can't calculate OR that's why 13 rows 
+write.csv(lung_map_neg, "lung_map_neg.csv")
+write.csv(lung_map_pos, "lung_map_pos.csv")
+```
+
+#OVARY
+```{r}
+#methylation array overlap with ovary mucusa chromatin segmentation file to get annotations for all CpGs in background
+ovary_background <- read.table("ovary_chmm_background.bed", sep="\t", header=F) 
+ovary_background <- ovary_background %>% rename(Name = V13) %>% select(V1:Name)
+
+ovary_background <- inner_join(ovary_background, cpgs, by = 'Name')
+ovary_background <- ovary_background %>% select(V1:Name) %>% filter(!duplicated(Name))
+
+#ovary CpGs with positive logFC overlapped with ovary mucuosa chromatin segmentation file 
+ovary_fdr_pos <- read.table("ovary_hyper_chmm.bed", sep="\t", header=F)
+ovary_fdr_pos <- ovary_fdr_pos %>% rename(Name = V13)
+
+ovary_fdr_pos <- inner_join(ovary_fdr_pos, ovary_background, by = 'Name')
+
+##ovary CpGs with negative logFC overlapped with ovary mucuosa chromatinc segmentation file
+ovary_fdr_neg <- read.table("ovary_hypo_chmm.bed", sep="\t", header=F) 
+ovary_fdr_neg <- ovary_fdr_neg %>% rename(Name = V13)
+
+ovary_fdr_neg <- inner_join(ovary_fdr_neg, ovary_background, by = 'Name')
+
+#Get counts of each type of chromatin segment (these are the ones that pass FDR)
+summary_fdr_pos <- ovary_fdr_pos %>% filter(!duplicated(Name)) %>% group_by(V4.x) %>% tally() %>% rename(FDR = n) %>% rename(V4 = V4.x)
+summary_fdr_neg <- ovary_fdr_neg %>% filter(!duplicated(Name)) %>% group_by(V4.x) %>% tally() %>% rename(FDR = n) %>% rename(V4 = V4.x)
+
+#Get counts of each type of chromatin segment (these are all CpGs in background array)
+summary_background <- ovary_background %>% filter(!duplicated(Name)) %>% group_by(V4) %>% tally() %>% rename(background = n)
+
+#E.g. segment TSS: calculate number number of CpGs that pass FDR+not TSS
+#calculate number of CpGs that are not TSS in background
+df1 <- inner_join(summary_fdr_pos, summary_background, by = 'V4')
+df1 <- df1 %>% mutate(notSegmentFDR = sum(FDR)-FDR, notSegmentBackground = sum(background)-background)
+
+df2 <- inner_join(summary_fdr_neg, summary_background, by = 'V4')
+df2 <- df2 %>% mutate(notSegmentFDR = sum(FDR)-FDR, notSegmentBackground = sum(background)-background)
+
+#Calculate odds ratio by creating 2x2 table 
+#FDR Background (2 columns)
+#Segment (e.g TSS) (row 1)
+#not Segment (row)
+or <- c()
+pval <- c()    
+for (i in 1:15){
+  mat <- matrix(c(df1$FDR[i], df1$background[i], df1$notSegmentFDR[i], df1$notSegmentBackground[i]), nrow=2, ncol=2, byrow=TRUE) 
+  or[i] <- oddsratio(mat)$measure[2,1]
+  pval[i] <- oddsratio(mat)$p.value[2,2]
+}
+
+#odds ratio table with p value for enrichment of ovary CpGs with positive logFC 
+ovary_map_pos <- data.frame(df1, or, pval)
+ovary_map_pos <- ovary_map_pos %>% rename(OR=or) %>% mutate(type = 'ovary positive logFC')
+
+or <- c()
+pval <- c()    
+for (i in 1:15){
+  mat <- matrix(c(df2$FDR[i], df2$background[i], df2$notSegmentFDR[i], df2$notSegmentBackground[i]), nrow=2, ncol=2, byrow=TRUE) 
+  or[i] <- oddsratio(mat)$measure[2,1]
+  pval[i] <- oddsratio(mat)$p.value[2,2]
+}
+
+ovary_map_neg <- data.frame(df1, or, pval)
+ovary_map_neg <- ovary_map_neg %>% rename(OR=or) %>% mutate(type = 'ovary negative logFC')
+
+#Add two additional rows to data.frame so that it's 15 rows so it matches table of ovarys 
+#note 2/15 segments not present in FDR ovary CpGs so can't calculate OR that's why 13 rows 
+write.csv(ovary_map_neg, "ovary_map_neg.csv")
+write.csv(ovary_map_pos, "ovary_map_pos.csv")
+```
+
+#BREAST
+```{r}
+#methylation array overlap with breast mucusa chromatin segmentation file to get annotations for all CpGs in background
+breast_background <- read.table("breast_chmm_background.bed", sep="\t", header=F) 
+breast_background <- breast_background %>% rename(Name = V13) %>% select(V1:Name)
+
+breast_background <- inner_join(breast_background, cpgs, by = 'Name')
+breast_background <- breast_background %>% select(V1:Name) %>% filter(!duplicated(Name))
+
+#breast CpGs with positive logFC overlapped with breast mucuosa chromatin segmentation file 
+breast_fdr_pos <- read.table("breast_hyper_chmm.bed", sep="\t", header=F)
+breast_fdr_pos <- breast_fdr_pos %>% rename(Name = V13)
+
+breast_fdr_pos <- inner_join(breast_fdr_pos, breast_background, by = 'Name')
+
+##breast CpGs with negative logFC overlapped with breast mucuosa chromatinc segmentation file
+breast_fdr_neg <- read.table("breast_hypo_chmm.bed", sep="\t", header=F) 
+breast_fdr_neg <- breast_fdr_neg %>% rename(Name = V13)
+
+breast_fdr_neg <- inner_join(breast_fdr_neg, breast_background, by = 'Name')
+
+#Get counts of each type of chromatin segment (these are the ones that pass FDR)
+summary_fdr_pos <- breast_fdr_pos %>% filter(!duplicated(Name)) %>% group_by(V4.x) %>% tally() %>% rename(FDR = n) %>% rename(V4 = V4.x)
+summary_fdr_neg <- breast_fdr_neg %>% filter(!duplicated(Name)) %>% group_by(V4.x) %>% tally() %>% rename(FDR = n) %>% rename(V4 = V4.x)
+
+#Get counts of each type of chromatin segment (these are all CpGs in background array)
+summary_background <- breast_background %>% filter(!duplicated(Name)) %>% group_by(V4) %>% tally() %>% rename(background = n)
+
+#E.g. segment TSS: calculate number number of CpGs that pass FDR+not TSS
+#calculate number of CpGs that are not TSS in background
+df1 <- inner_join(summary_fdr_pos, summary_background, by = 'V4')
+df1 <- df1 %>% mutate(notSegmentFDR = sum(FDR)-FDR, notSegmentBackground = sum(background)-background)
+
+df2 <- inner_join(summary_fdr_neg, summary_background, by = 'V4')
+df2 <- df2 %>% mutate(notSegmentFDR = sum(FDR)-FDR, notSegmentBackground = sum(background)-background)
+
+#Calculate odds ratio by creating 2x2 table 
+#FDR Background (2 columns)
+#Segment (e.g TSS) (row 1)
+#not Segment (row)
+or <- c()
+pval <- c()    
+for (i in 1:15){
+  mat <- matrix(c(df1$FDR[i], df1$background[i], df1$notSegmentFDR[i], df1$notSegmentBackground[i]), nrow=2, ncol=2, byrow=TRUE) 
+  or[i] <- oddsratio(mat)$measure[2,1]
+  pval[i] <- oddsratio(mat)$p.value[2,2]
+}
+
+#odds ratio table with p value for enrichment of breast CpGs with positive logFC 
+breast_map_pos <- data.frame(df1, or, pval)
+breast_map_pos <- breast_map_pos %>% rename(OR=or) %>% mutate(type = 'breast positive logFC')
+
+or <- c()
+pval <- c()    
+for (i in 1:15){
+  mat <- matrix(c(df2$FDR[i], df2$background[i], df2$notSegmentFDR[i], df2$notSegmentBackground[i]), nrow=2, ncol=2, byrow=TRUE) 
+  or[i] <- oddsratio(mat)$measure[2,1]
+  pval[i] <- oddsratio(mat)$p.value[2,2]
+}
+
+breast_map_neg <- data.frame(df1, or, pval)
+breast_map_neg <- breast_map_neg %>% rename(OR=or) %>% mutate(type = 'breast negative logFC')
+
+#Add two additional rows to data.frame so that it's 15 rows so it matches table of breasts 
+#note 2/15 segments not present in FDR breast CpGs so can't calculate OR that's why 13 rows 
+write.csv(breast_map_neg, "breast_map_neg.csv")
+write.csv(breast_map_pos, "breast_map_pos.csv")
+```
+
+#Plot the odds ratio
+```{r}
+colon_map_pos <- read.csv("colon_map_pos.csv")
+lung_map_pos <- read.csv("lung_map_pos.csv")
+ovary_map_pos <- read.csv("ovary_map_pos.csv")
+breast_map_pos <- read.csv("breast_map_pos.csv")
+
+pos <- rbind(colon_map_pos, lung_map_pos, ovary_map_pos, breast_map_pos)
+
+all_map <-pos %>% mutate(z = log(OR))
+all_map$stars <- cut(all_map$pval, breaks=c(-Inf, 0.001, 0.01, 0.05, Inf), label=c("***", "**", "*", "")) 
+values <- c(0.01, 0.5, 1, 5, 10, 20) %>% log
+breaks <- c(0.01, 0.5, 1, 5, 10, 20) %>% log
+labels <- c("0.01", "0.5", "1", "5","10", "20")
+limits <- c(0.01, 20) %>% log
+
+
+level_order = c("1_TssA","2_TssAFlnk", "3_TxFlnk","4_Tx", "5_TxWk",  "6_EnhG", "7_Enh", "8_ZNF/Rpts", "9_Het", "10_TssBiv", "11_BivFlnk",  "12_EnhBiv", "13_ReprPC",  "14_ReprPCWk", "15_Quies")
+
+#level_order = c("15_Quies","14_ReprPCWk", "13_ReprPC", "12_EnhBiv", "11_BivFlnk", "10_TssBiv", "9_Het","8_ZNF/Rpts","7_Enh","6_EnhG","5_TxWk","4_Tx","3_TxFlnk","2_TssAFlnk","1_TssA")
+g1 <- ggplot(all_map, aes(x = type, factor(V4, levels = level_order))) +
+    geom_tile(aes(fill = z))+
+    geom_text(aes(label=stars), color="black", size=6)+
+    theme_bw()+coord_equal()+
+    scale_fill_gradientn(colours=c("darkseagreen4",
+                                   "darkseagreen1",
+                                   "white", "lightgoldenrod1", "gold1", "goldenrod3"),
+                         values=rescale(values), 
+                         guide="colorbar",
+                         labels = labels,
+                         limits = limits, 
+                         breaks=breaks)+xlab("")+ylab("Chromatin segmentation")+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+labs(fill = "OR") + THEME
+g1
+```
+
+
+```{r}
+colon_map_neg <- read.csv("colon_map_neg.csv")
+lung_map_neg <- read.csv("lung_map_neg.csv")
+ovary_map_neg <- read.csv("ovary_map_neg.csv")
+breast_map_neg <- read.csv("breast_map_neg.csv")
+
+neg <- rbind(colon_map_neg, lung_map_neg, ovary_map_neg, breast_map_neg)
+all_map <-neg %>% mutate(z = log(OR))
+all_map$stars <- cut(all_map$pval, breaks=c(-Inf, 0.001, 0.01, 0.05, Inf), label=c("***", "**", "*", "")) 
+values <- c(0.01, 0.5, 1, 2, 5) %>% log
+breaks <- c(0.01, 0.5, 1, 2, 5) %>% log
+labels <- c("0.01", "0.5", "1", "2", "5")
+limits <- c(0.01, 6) %>% log
+
+#level_order = c("15_Quies","14_ReprPCWk", "13_ReprPC", "12_EnhBiv", "11_BivFlnk", "10_TssBiv", "9_Het","8_ZNF/Rpts","7_Enh","6_EnhG","5_TxWk","4_Tx","3_TxFlnk","2_TssAFlnk","1_TssA")
+
+level_order = c("1_TssA","2_TssAFlnk", "3_TxFlnk","4_Tx", "5_TxWk",  "6_EnhG", "7_Enh", "8_ZNF/Rpts", "9_Het", "10_TssBiv", "11_BivFlnk",  "12_EnhBiv", "13_ReprPC",  "14_ReprPCWk", "15_Quies")
+
+g1 <- ggplot(all_map, aes(x = type, factor(V4, levels = level_order))) +
+    geom_tile(aes(fill = z))+
+    geom_text(aes(label=stars), color="black", size=6)+
+    theme_bw()+coord_equal()+
+    scale_fill_gradientn(colours=c("darkseagreen4",
+                                   "darkseagreen1",
+                                   "white", "lightgoldenrod1", "goldenrod3"),
+                         values=rescale(values), 
+                         guide="colorbar",
+                         labels = labels,
+                         limits = limits, 
+                         breaks=breaks)+xlab("")+ylab("Chromatin segmentation")+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+labs(fill = "OR") + THEME
+g1
+```
