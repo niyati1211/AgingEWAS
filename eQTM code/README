@@ -1,1 +1,3 @@
-
+eQTMs_analysis.Rmd: contains the R code for eQTM regression analysis
+eQTM_input_file.Rmd: contains the R code to generate input file for eQTM analysis
+mapping_cpg_gene.Rmd: contains the R code for mapping CpGs to gene names
