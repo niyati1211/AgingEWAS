@@ -1,1 +1,8 @@
-
+age_EWAS_lung_code_updated.Rhistory: contains the R code for the genome wide smoking EWAS analyses for lung tissues. 
+age_EWAS_colon_code_updated.Rhistory: contains the R code for the genome wide smoking EWAS analyses for colon tissues. 
+age_EWAS_testis_code_updated.Rhistory: contains the R code for the genome wide smoking EWAS analyses for testis tissues. 
+age_EWAS_ovary_code_updated.Rhistory: contains the R code for the genome wide smoking EWAS analyses for ovary tissues. 
+age_EWAS_muscle_code_updated.Rhistory: contains the R code for the genome wide smoking EWAS analyses for muscle tissues. 
+age_EWAS_prostate_code_updated.Rhistory: contains the R code for the genome wide smoking EWAS analyses for prostate tissues. 
+age_EWAS_wb_code_updated.Rhistory: contains the R code for the genome wide smoking EWAS analyses for whole blood tissues. 
+age_EWAS_kidney_code_updated.Rhistory: contains the R code for the genome wide smoking EWAS analyses for kidney tissues.  
