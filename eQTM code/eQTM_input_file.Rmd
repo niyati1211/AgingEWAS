@@ -1,0 +1,89 @@
+---
+title: "eQTM analysis"
+author: "Niyati Jain"
+date: "2023-07-17"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(data.table)
+library(readxl)
+library(ggplot2)
+```
+
+Read in the file generated from the "mapping_cpg_gene.Rmd" script
+```{r}
+cpg_gene_overlap <- read.table("cpg_gene_overlap.bed", sep = "\t", header = F)
+cpg_gene_overlap <- cpg_gene_overlap %>% select(V4, V9) %>% rename(Name = V4, Ensembl = V9)
+```
+
+Load the Age-Expression association results for each tissue type 
+```{r}
+breast <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Age_TL_expression_assoc/Age_results/updated/results/age_expression_assoc_breast_sv10.txt", sep = ' ', header = T)
+colon <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Age_TL_expression_assoc/Age_results/updated/results/age_expression_assoc_colon_sv10.txt", sep = ' ', header = T)
+lung <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Age_TL_expression_assoc/Age_results/updated/results/age_expression_assoc_lung_sv10.txt", sep = ' ', header = T)
+prostate <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Age_TL_expression_assoc/Age_results/updated/results/age_expression_assoc_prostate_sv10.txt", sep = ' ', header = T)
+```
+
+Load the Age-DNAm association results for each tissue type 
+```{r}
+dnam_breast <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_breast_manifest_sv5updated_FDR05.txt", header=F, fill=T)
+dnam_colon <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_colon_manifest_sv10updated_FDR05.txt", header=F, fill=T)
+dnam_lung <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_lung_manifest_sv10updated_FDR05.txt", header=F, fill=T)
+dnam_prostate <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/EWAS_results/SV_updated_results/age/age_EWAS_results_prostate_manifest_sv10updated_FDR05.txt", header=F, fill=T)
+```
+
+Update the column names in the Age-DNAm association files
+```{r}
+colnames(dnam_breast) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(dnam_colon) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(dnam_lung) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(dnam_kidney) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(dnam_ovary) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(dnam_prostate) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(dnam_testis) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+colnames(dnam_wblood) <-c("Name", "logFC", "CI.L", "CI.R", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "Genome_Build", "CHR", "MAPINFO", "UCSC_RefGene_Name")
+```
+
+BREAST
+```{r}
+#Assign CpGs passing FDR 0.05 to genes 
+dnam_breast_df <- inner_join(dnam_breast, cpg_gene_overlap, by = 'Name')
+breast <- breast %>% rename(Ensembl = Name)
+
+#Join the DNAm results with the gene expression results. Inner-join based on matching the "Ensembl" gene variable
+dnam_expr_breast <- dnam_breast_df %>% inner_join(breast, by = 'Ensembl', relationship = "many-to-many") %>% select(Name, P.Value.x, adj.P.Val.x, logFC.x, Ensembl, P.Value.y, adj.P.Val.y, logFC.y, gene) %>% rename(CpG = Name, DNAm_Pvalue = P.Value.x, DNAm_adj_Pvalue = adj.P.Val.x, DNAm_logFC = logFC.x, Expr_Pvalue = P.Value.y, Expr_adj_Pvalue = adj.P.Val.y, Expr_logFC = logFC.y)
+```
+
+COLON
+```{r}
+#Assign CpGs passing FDR 0.05 to genes 
+dnam_colon_df <- inner_join(dnam_colon, cpg_gene_overlap, by = 'Name')
+colon <- colon %>% rename(Ensembl = Name)
+
+#Join the DNAm results with the gene expression results. Inner-join based on matching the "Ensembl" gene variable
+dnam_expr_colon <- dnam_colon_df %>% inner_join(colon, by = 'Ensembl', relationship = "many-to-many") %>% select(Name, P.Value.x, adj.P.Val.x, logFC.x, Ensembl, P.Value.y, adj.P.Val.y, logFC.y, gene) %>% rename(CpG = Name, DNAm_Pvalue = P.Value.x, DNAm_adj_Pvalue = adj.P.Val.x, DNAm_logFC = logFC.x, Expr_Pvalue = P.Value.y, Expr_adj_Pvalue = adj.P.Val.y, Expr_logFC = logFC.y)
+
+```
+
+LUNG
+```{r}
+#Assign CpGs passing FDR 0.05 to genes 
+dnam_lung_df <- inner_join(dnam_lung, cpg_gene_overlap, by = 'Name')
+lung <- lung %>% rename(Ensembl = Name)
+
+#Join the DNAm results with the gene expression results. Inner-join based on matching the "Ensembl" gene variable
+dnam_expr_lung <- dnam_lung_df %>% inner_join(lung, by = 'Ensembl', relationship = "many-to-many") %>% select(Name, P.Value.x, adj.P.Val.x, logFC.x, Ensembl, P.Value.y, adj.P.Val.y, logFC.y, gene) %>% rename(CpG = Name, DNAm_Pvalue = P.Value.x, DNAm_adj_Pvalue = adj.P.Val.x, DNAm_logFC = logFC.x, Expr_Pvalue = P.Value.y, Expr_adj_Pvalue = adj.P.Val.y, Expr_logFC = logFC.y)
+```
+
+PROSTATE
+```{r}
+#Assign CpGs passing FDR 0.05 to genes 
+dnam_prostate_df <- inner_join(dnam_prostate, cpg_gene_overlap, by = 'Name')
+prostate <- prostate %>% rename(Ensembl = Name)
+
+#Join the DNAm results with the gene expression results. Inner-join based on matching the "Ensembl" gene variable
+dnam_expr_prostate <- dnam_prostate_df %>% inner_join(prostate, by = 'Ensembl', relationship = "many-to-many") %>% select(Name, P.Value.x, adj.P.Val.x, logFC.x, Ensembl, P.Value.y, adj.P.Val.y, logFC.y, gene) %>% rename(CpG = Name, DNAm_Pvalue = P.Value.x, DNAm_adj_Pvalue = adj.P.Val.x, DNAm_logFC = logFC.x, Expr_Pvalue = P.Value.y, Expr_adj_Pvalue = adj.P.Val.y, Expr_logFC = logFC.y)
+```
+

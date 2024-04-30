@@ -1,0 +1,103 @@
+---
+title: "breast_eQTMs"
+author: "Niyati Jain"
+date: "2023-07-17"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(data.table)
+library(readxl)
+library(ggplot2)
+library(sva)
+library(purrr)
+```
+
+Expression and DNAm and Covariates
+Change the input data for lung, prostate, and colon 
+Expression: colon_filtered_genes_exp.RData, lung_filtered_genes_exp.RData, prostate_filtered_genes_exp.RData
+DNAm: noob_final_BMIQ_colon_2-6-2021.RData,noob_final_BMIQ_lung_2-6-2021.RData, noob_final_BMIQ_prostate_2-6-2021.RData
+pairs: colon_DNAm_Expr_FDR05.txt, lung_DNAm_Expr_FDR05.txt, prostate_DNAm_Expr_FDR05.txt
+Covariates: cov_colon_for_age_analysis.txt, cov_lung_for_age_analysis.txt, cov_prostate_for_age_analysis.txt
+Episcore: colon_episcore_estimates.txt, lung_episcore_estimates.txt, prostate_episcore_estimates.txt
+
+Example with BREAST
+```{r}
+#Expression data
+expr <- load("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Age_TL_expression_assoc/expression_data/breast_filtered_genes_exp.RData")
+#DNAm data
+dnam <- load("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/noob_final_BMIQ_breast_2-6-2021.RData")
+#Covariates for the DNAm analysis
+cov <- read.table("/Volumes/groups/Projects/GTEx/Age_TL_EWAS/Lin_analysis/cov/age_cov/cov_breast_for_age_analysis.txt", sep = "\t", header=T)
+#Table containing age-related CpGs (FDR 0.05), the associated gene expression results ("generated in the eQTM_input_file.Rmd script)
+pairs <- read.table("/Volumes/groups/Projects/GTEx/niyati/Aging_EWAS_new_SVA/DNAm-Expression/Data/breast_DNAm_Expr_FDR05.txt", sep = "\t", header=T)
+#Episcore cell type estimates for breast tissue
+ctc <- read.table("/Volumes/groups/Projects/GTEx/niyati/Aging_EWAS_new_SVA/Episcore/Data/breast_episcore_estimates.txt", sep = "\t", header = T)
+```
+
+
+```{r}
+#format the colnames of gene expression data 
+new_colnames <- gsub("\\.", "-", colnames(breast_filtered_gene_exp))  # Replace "." with "-"
+new_colnames <- gsub(".{6}$", "", new_colnames)         # Remove last 6 characters
+colnames(breast_filtered_gene_exp) <- new_colnames
+rownames(breast_filtered_gene_exp) <- breast_filtered_gene_exp[, 1]
+breast_filtered_gene_exp <- breast_filtered_gene_exp[, -1]
+
+row_values_2 <- as.data.frame(cov$CollaboratorSampleID)
+colvalues <- as.data.frame(colnames(breast_filtered_gene_exp))
+
+colnames(row_values_2) <- c("Name")
+colnames(colvalues) <- c("Name")
+
+#extract the sample IDs for samples where we have DNAm data 
+overlap <- row_values_2 %>% inner_join(colvalues) 
+sample <- overlap$Name
+selected_samples<- breast_filtered_gene_exp[, sample]
+
+#select the genes, where we have CpG-gene pairs with DNAm and gene expression data
+geneIds <- pairs$Ensembl
+selected_samples_genes <- selected_samples[geneIds, ]
+```
+
+```{r}
+#select the CpGs, where we have CpG-gene pairs with DNAm and gene expression data
+row_values <- pairs$CpG
+selected_CpGs <- noob_final_BMIQ_breast[row_values, ]
+selected_CpGs_samples <- selected_CpGs[,sample]
+```
+
+```{r}
+#transform the data
+selected_CpGs_samples_T = t(selected_CpGs_samples)
+selected_genes_samples_T = t(selected_samples_genes)
+```
+
+```{r}
+#format the covariates file
+colnames(ctc)[1] <- "CollaboratorSampleID"
+cov <- inner_join(cov, ctc, by='CollaboratorSampleID')
+covariates <- cov[match(sample, cov$CollaboratorSampleID), ]
+```
+
+```{r}
+#Regression analysis function
+#For each pairs of CpG and gene, extract the DNAm and gene expression data, respectively
+#combine the data with covariates and run the lm model 
+regression_table <- map2_df(pairs$CpG, pairs$Ensembl, function(x_val, y_val) {
+  selected_cols1 <- selected_CpGs_samples_T[, x_val]
+  selected_cols2 <- selected_genes_samples_T[, y_val]
+  combined_data <- cbind(selected_cols1, selected_cols2, covariates)
+  model <- lm(selected_cols2 ~ selected_cols1 + BMI + TRISCHD + as.factor(sample_group) + as.factor(raceRE) + Basal + EC + Fat + Fib + Luminal + Lym + MP, data = combined_data)
+  p_value <- summary(model)$coefficients[2, "Pr(>|t|)"]
+  estimate <- summary(model)$coefficients[2, "Estimate"]
+  
+  data.frame(CpG = x_val, Ensembl_ID = y_val, p_value = p_value, estimate = estimate, stringsAsFactors = FALSE)
+})
+
+#format the result table
+regression_table_final <- regression_table %>% mutate(adjusted = p.adjust(p_value, method = "fdr", n = length(p_value))) %>% inner_join(pairs, by = 'CpG', relationship = "many-to-many") %>% select(CpG, Ensembl, p_value, estimate, adjusted, gene) 
+regression_table_final <- regression_table_final %>% mutate(id = paste0(CpG,"_",Ensembl)) %>% filter(!duplicated(id))
+```
+

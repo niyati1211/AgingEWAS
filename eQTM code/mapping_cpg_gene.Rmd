@@ -1,0 +1,63 @@
+---
+title: "Mapping CpG to gene"
+author: "Niyati Jain"
+date: "2023-10-04"
+output: html_document
+---
+
+This script 
+
+```{r}
+library(tidyverse)
+library(data.table)
+library(readxl)
+library(ggplot2)
+library(sva)
+library(purrr)
+```
+
+Input the gencode gencode.v26.GRCh38.genes.strand.bed (https://www.gencodegenes.org/human/release_26.html)
+Get FLANKS tool from galaxy.org
+Both, +/- 10kb (whole feature)
+There are two rows per gene 
+Coordinates of first row  "start-10kb", "start"
+Coordinates of first row  "end", "end+10kb"
+
+```{r}
+# Load data frame with flanking regions
+gene_flanks_df <- read.table("genes_10kb_flank.bed", header = FALSE)
+
+selected_values <- list()
+
+# Iterate through rows in pairs
+for (i in seq(1, nrow(gene_flanks_df), by = 2)) {
+  row1 <- gene_flanks_df[i, ]  # Get values from row 1
+  row2 <- gene_flanks_df[i + 1, ]  # Get values from row 2 (next row)
+  
+  # Select 
+  #row1[1] = chr
+  #row1[2] = start -10kb
+  #row2[3] = end +10kb
+  #row1[4] = gene ID
+  #row1[5] = strand
+  selected_row <- c(as.character(row1[1]), as.character(row1[2]), as.character(row2[3]), as.character(row1[4]), as.character(row1[5]))
+  
+  # Append the selected values to the list
+  selected_values[[i]] <- selected_row
+}
+
+# Create a new data frame from the selected values
+new_df <- data.frame(do.call(rbind, selected_values))
+
+# Save the new data frame
+write.table(new_df, "modified_gencode.v26.GRCh38.genes.strand.bed", row.names = FALSE, quote = F, sep = "\t")
+
+```
+
+Liftover EPIC manifest (754,199 CpGs used in aging EWAS analysis) to hg38 using UCSC LiftOver
+Output = methylation_epic_hg38.bed 
+
+```{bash}
+bedtools intersect -a methylation_epic_hg38.bed -b modified_gencode.v26.GRCh38.genes.strand.bed -wa -wb > cpg_gene_overlap.bed 
+```
+
