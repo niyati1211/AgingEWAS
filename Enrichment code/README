@@ -1,1 +1,2 @@
-
+chromatin_segmentation_analysis.Rmd: contains the R code for chromatin segmentation analysis 
+island_enrichment_analysis.Rmd: contains the R code for CpG island status enrichment analysis
